@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+
+<robot name="Core" xmlns:xacro="http://ros.org/wiki/xacro">
+    <!-- Properties -->
+    <!-- Colors -->
+    <xacro:property name="Black" value="0.1 0.1 0.1 1" />
+    <xacro:property name="Grey" value="0.35 0.35 0.35 1" />
+    <xacro:property name="Orange" value=".9569 .5372 .2588 1" />
+    <xacro:property name="Blue" value=".0157 .1176 .6588 0.8" />
+    <xacro:property name="Maize" value=".9451 .7686 0 1" />
+    <xacro:property name="LightGrey" value="0.75 0.75 0.75 1" />
+    <xacro:property name="Red" value="0.8 0.1 0.1 1" />
+    <xacro:property name="Green" value="0.1 0.8 0.1 1" />
+    <xacro:property name="Purple" value="0.8 0.1 0.8 1" />
+    <!-- Physical Properties -->
+    <xacro:property name="CoreSize" value="0.01" />
+    <xacro:property name="ConnectorSize" value="0.005" />
+    <xacro:property name="ConnectionDist" value="0.01" />
+
+
+    <!-- Color Definitions-->
+    <xacro:macro name="Mat" params="cname color">
+        <material name="${cname}">
+            <color rgba="${color}"/>
+        </material>
+    </xacro:macro>
+    <xacro:Mat cname="Black" color="${Black}"/>
+    <xacro:Mat cname="Grey" color="${Grey}"/>
+    <xacro:Mat cname="Orange" color="${Orange}"/>
+    <xacro:Mat cname="Blue" color="${Blue}"/>
+    <xacro:Mat cname="Maize" color="${Maize}"/>
+    <xacro:Mat cname="LightGrey" color="${LightGrey}"/>
+    <xacro:Mat cname="Red" color="${Red}"/>
+    <xacro:Mat cname="Green" color="${Green}"/>
+    <xacro:Mat cname="Purple" color="${Purple}"/>
+    
+    <!-- Link Definitions-->
+    <xacro:macro name="Core" params="cname color">
+        <link name="Core">
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <sphere radius="${CoreSize}"/>
+                </geometry>
+                <material name="${cname}">
+                    <color rgba="${color}"/>
+                </material>
+            </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <sphere radius="${CoreSize}"/>
+                </geometry>
+                <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
+            </collision>
+        </link>
+    </xacro:macro>
+    <xacro:macro name="Connector" params="id_num cname color">
+        <link name="Connector_${id_num}">
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <sphere radius="${ConnectorSize}"/>
+                </geometry>
+                <material name="${cname}">
+                    <color rgba="${color}"/>
+                </material>
+            </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <sphere radius="${ConnectorSize}"/>
+                </geometry>
+                <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
+            </collision>
+        </link>
+    </xacro:macro>
+
+    <!-- Joint Definitions -->
+    <xacro:macro name="fixedJoint" params="parent child pos rot">
+        <joint name="$fixed_${parent}_${child}" type="fixed">
+            <origin xyz="${pos}" rpy="${rot}"/>
+            <parent link="${parent}" />
+            <child link="${child}" />
+        </joint>
+    </xacro:macro>
+    
+    <!-- Links -->
+    <xacro:Core cname="Blue" color="${Blue}"/>
+    <xacro:Connector id_num = "1" cname="Orange" color="${Orange}" />
+    <xacro:Connector id_num = "2" cname="Orange" color="${Orange}" />
+    <xacro:Connector id_num = "3" cname="Grey" color="${Grey}" />
+    <xacro:Connector id_num = "4" cname="Grey" color="${Grey}" />
+    <xacro:Connector id_num = "5" cname="Purple" color="${Purple}" />
+    <xacro:Connector id_num = "6" cname="Purple" color="${Purple}" />
+
+    <!-- Joints -->
+    <xacro:fixedJoint parent="Core" child="Connector_1" pos="0 ${ConnectionDist} 0" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_2" pos="0 -${ConnectionDist} 0" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_3" pos="0 0 ${ConnectionDist}" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_4" pos="0 0 -${ConnectionDist}" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_5" pos="${ConnectionDist} 0 0" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_6" pos="-${ConnectionDist} 0 0" rot="0 0 0" />
+    <!-- <xacro:fixedJoint parent="Core" child="Connector_1" pos="${ConnectionDist} 0 0" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_2" pos="-${ConnectionDist} 0 0" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_3" pos="0 ${ConnectionDist} 0" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_4" pos="0 -${ConnectionDist} 0" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_5" pos="0 0 ${ConnectionDist}" rot="0 0 0" />
+    <xacro:fixedJoint parent="Core" child="Connector_6" pos="0 0 -${ConnectionDist}" rot="0 0 0" /> -->
+    
+</robot>

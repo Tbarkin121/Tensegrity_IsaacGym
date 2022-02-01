@@ -52,7 +52,7 @@ class TenseBot6(VecTask):
         self.goal_threshold = self.cfg["env"]["goalThreshold"]
 
         # Spring Length Mulitpliers (n)
-        self.cfg["env"]["numActions"] = len(self.cfg["tensegrityParams"]["connections"])
+        self.cfg["env"]["numActions"] = len(self.cfg["tensegrityParams"]["connections"])-6 #the 6 connections to the core aren't actionable
 
         # obs_buf shapes: (81)
         # obs_buf[0:9] = Avg Pos (3), Avg LinVel (3), Avg AngVel (3) : 9
@@ -61,27 +61,31 @@ class TenseBot6(VecTask):
         # obs_buf[51:54] = Goal Pos : Pos(3)
         # obs_buf[54:57] = vector to goal (3) 
         # obs_buf[57:81] = actions : Spring Length Multipliers (24 for T6)
-        self.cfg["env"]["numObservations"] = 33 + self.cfg["env"]["numActions"]
+        self.cfg["env"]["numObservations"] = 37 + self.cfg["env"]["numActions"]
 
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
         
         # get gym GPU root state tensor
         actor_root_state = self.gym.acquire_actor_root_state_tensor(self.sim)
         self.root_states = gymtorch.wrap_tensor(actor_root_state)
-        print('root_state')
-        print(self.root_states.cpu().detach().numpy())
-        print(self.root_states.shape)
-        print('num_envs {}, num_actors {}'.format(self.num_envs, self.num_actors))
-
-        self.tensebot_pos = self.root_states.view(self.num_envs, self.num_actors, 13)[..., 0:6, 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
-        self.tensebot_ori = self.root_states.view(self.num_envs, self.num_actors, 13)[..., 0:6, 3:7] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
-        self.tensebot_linvel = self.root_states.view(self.num_envs, self.num_actors, 13)[..., 0:6, 7:10] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
-        self.tensebot_angvel = self.root_states.view(self.num_envs, self.num_actors, 13)[..., 0:6, 10:13] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
-        self.goal_pos = self.root_states.view(self.num_envs, self.num_actors, 13)[..., 6, 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        # These are the core states. No longer need to do averaging... 
+        self.tensebot_pos = self.root_states.view(self.num_envs, self.num_actors, 13)[..., self.num_actors-2, 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        self.tensebot_ori = self.root_states.view(self.num_envs, self.num_actors, 13)[..., self.num_actors-2, 3:7] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        self.tensebot_linvel = self.root_states.view(self.num_envs, self.num_actors, 13)[..., self.num_actors-2, 7:10] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        self.tensebot_angvel = self.root_states.view(self.num_envs, self.num_actors, 13)[..., self.num_actors-2, 10:13] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        self.goal_pos = self.root_states.view(self.num_envs, self.num_actors, 13)[..., self.num_actors-1, 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
 
         self.gym.refresh_actor_root_state_tensor(self.sim)
-        self.tensebot_root_state = self.root_states.view(self.num_envs, self.num_actors, 13)[..., 0:6, :]
+        self.tensebot_root_state = self.root_states.view(self.num_envs, self.num_actors, 13)[..., 0:self.num_actors-1, :]
         self.tensebot_initial_root_states = self.tensebot_root_state.clone()
+        self.tensebot_initial_rotation = self.tensebot_ori.clone()
+        # print('root_state')
+        # print(self.root_states.shape)
+        # print(self.root_states.view(self.num_envs, self.num_actors, 13))
+        # print(self.root_states.view(self.num_envs, self.num_actors, 13).shape)
+        # print('num_envs {}, num_actors {}'.format(self.num_envs, self.num_actors))
+        # time.sleep(5)
+
         # self.tensebot_initial_root_states[:] = to_torch(self.base_init_state, device=self.device, requires_grad=False)
 
         rb_state_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim)
@@ -95,14 +99,20 @@ class TenseBot6(VecTask):
         self.rb_ori = self.rb_state.view(self.num_envs, self.num_bodies, 13)[:, :, 3:7] #num_envs, num_rigid_bodies, 13 (pos,ori,Lvel,Avel)
         self.rb_linvel = self.rb_state.view(self.num_envs, self.num_bodies, 13)[:, :, 7:10] #num_envs, num_rigid_bodies, 13 (pos,ori,Lvel,Avel)
         self.rb_angvel = self.rb_state.view(self.num_envs, self.num_bodies, 13)[:, :, 10:13] #num_envs, num_rigid_bodies, 13 (pos,ori,Lvel,Avel)
-        # Used for rewarding moving towards a target
         
+        sensor_tensor = self.gym.acquire_force_sensor_tensor(self.sim)
+        sensors_per_env = 12
+        vec_sensor_tensor = gymtorch.wrap_tensor(sensor_tensor).view(self.num_envs, sensors_per_env * 6)
+        # tensebot_pos = root_states.view(num_envs, num_actors, 13)[..., 0:6, 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        self.foot_forces = vec_sensor_tensor.view(self.num_envs, sensors_per_env, 6)[..., 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        self.foot_torques = vec_sensor_tensor.view(self.num_envs, sensors_per_env, 6)[..., 3:6] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+
         contact_state_tensor = self.gym.acquire_net_contact_force_tensor(self.sim)
         self.contact_tensor = gymtorch.wrap_tensor(contact_state_tensor)   
-        self.body_contact_force = self.contact_tensor.view(self.num_envs, self.num_bodies, 3)[:, 0:-1, :]
+        self.body_contact_force = self.contact_tensor.view(self.num_envs, self.num_bodies, 3)[:, 0:-8, :]
         
-        tensebot_avg_pos = torch.mean(self.tensebot_pos, dim=1)
-        to_target = self.goal_pos - tensebot_avg_pos
+        # Used for rewarding moving towards a target
+        to_target = self.goal_pos - self.tensebot_pos
         to_target[:, 2] = 0.0
         self.potentials = -torch.norm(to_target, p=2, dim=-1) / self.dt
         self.prev_potentials = self.potentials.clone()
@@ -113,48 +123,76 @@ class TenseBot6(VecTask):
             self.reset_goal(goal_ids)
 
         # Measurements for rewards
-        # self.up_vec = to_torch(get_axis_params(1., self.up_axis_idx), device=self.device).repeat((self.num_envs, 1))
-        # self.heading_vec = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        # self.inv_start_rot = quat_conjugate(self.start_rotation).repeat((self.num_envs, 1))
-        # self.basis_vec0 = self.heading_vec.clone()
-        # self.basis_vec1 = self.up_vec.clone()
+        self.up_vec = to_torch(get_axis_params(1., self.up_axis_idx), device=self.device).repeat((self.num_envs, 1))
+        self.heading_vec = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
+        
+        self.inv_start_rot = quat_conjugate(self.tensebot_initial_rotation)
+        self.basis_vec0 = self.heading_vec.clone()
+        self.basis_vec1 = self.up_vec.clone()
         
         self.frame_count = 0
         self.plot_buffer = []
         self.accumulated_reward = torch.zeros_like(self.rew_buf)
 
         camOffset = gymapi.Vec3(0, -1.5, 0.25)
-        camTarget = gymapi.Vec3(self.tensebot_pos[0, 0, 0],self.tensebot_pos[0, 0, 1],self.tensebot_pos[0, 0, 2])
+        camTarget = gymapi.Vec3(self.tensebot_pos[0, 0], self.tensebot_pos[0, 1], self.tensebot_pos[0, 2])
         self.gym.viewer_camera_look_at(self.viewer, None, camOffset+camTarget, camTarget)
     
     def create_tensegrity_connections(self):
         # Defining the spring connection List
         self.connection_list = []
-        self.connection_matrix = torch.zeros(self.num_bodies, len(self.cfg["tensegrityParams"]["connections"]), device=self.device)
-        idx = 0
-        for connection in self.cfg["tensegrityParams"]["connections"]:
-            support1 = self.cfg["tensegrityParams"]["supportNames"].index(connection[0])      #converts to the body index number
-            point1 = 1 if connection[1] == "B" else 0 #0 for top and 1 for bottom
-            rb_num1 = support1*3 + point1 + 1 #traverse the list (1,2),(4,5),(7,8),(10,11),(13,14),(16,17). the end point rigid body index
+        num_connections = len(self.cfg["tensegrityParams"]["connections"])
+        
+        self.connection_matrix = torch.zeros(self.num_bodies, num_connections, device=self.device)
+        # The +6 is for the 6 connections to the core
+        for connection, idx in zip(self.cfg["tensegrityParams"]["connections"], range(num_connections)):
+            print(connection)
+            if(connection[0] in self.cfg["tensegrityParams"]["supportNames"] and connection[2] in self.cfg["tensegrityParams"]["supportNames"]):
+                support1 = self.cfg["tensegrityParams"]["supportNames"].index(connection[0])      #converts to the body index number
+                point1 = 1 if connection[1] == "B" else 0 #0 for top and 1 for bottom
+                rb_num1 = support1*3 + point1 + 1 #traverse the list (1,2),(4,5),(7,8),(10,11),(13,14),(16,17). the end point rigid body index
 
-            support2 = self.cfg["tensegrityParams"]["supportNames"].index(connection[2])
-            point2 = 1 if connection[3] == "B" else 0 #0 for top and 1 for bottom
-            rb_num2 = support2*3 + point2 + 1 
+                support2 = self.cfg["tensegrityParams"]["supportNames"].index(connection[2])
+                point2 = 1 if connection[3] == "B" else 0 #0 for top and 1 for bottom
+                rb_num2 = support2*3 + point2 + 1 
 
-            spring_length = connection[4]
-            self.connection_list.append([rb_num1, rb_num2, spring_length])
+                spring_length = connection[4]
+                self.connection_list.append([rb_num1, rb_num2, spring_length])
 
-            self.connection_matrix[rb_num1, idx] = 1
-            self.connection_matrix[rb_num2, idx] = -1
-            idx += 1
+                self.connection_matrix[rb_num1, idx] = 1
+                self.connection_matrix[rb_num2, idx] = -1
+            else: #Else Core... for now
+                support1 = len(self.cfg["tensegrityParams"]["supportNames"])*3
+                if(connection[1] == "C1"):
+                    point1 = 1
+                elif(connection[1] == "C2"):
+                    point1 = 2
+                elif(connection[1] == "C3"):
+                    point1 = 3
+                elif(connection[1] == "C4"):
+                    point1 = 4
+                elif(connection[1] == "C5"):
+                    point1 = 5
+                elif(connection[1] == "C6"):
+                    point1 = 6
+                rb_num1 = support1 + point1
+
+                support2 = self.cfg["tensegrityParams"]["supportNames"].index(connection[2])
+                rb_num2 = support2*3
+                spring_length = 0.0
+                self.connection_list.append([rb_num1, rb_num2, spring_length])
+                self.connection_matrix[rb_num1, idx] = 1
+                self.connection_matrix[rb_num2, idx] = -1
+
         self.connection_list = torch.tensor(self.connection_list, device=self.device)
 
 
-    def create_tensegrity(self, env, asset, collision_group, collision_filter):
+    def create_tensegrity(self, env, support_asset, core_asset, collision_group, collision_filter):
         # Create the support objects for the env
         assembly_handles = []
         initial_pose = gymapi.Transform()
         self.SupportHandles=[]
+        self.create_force_sensors(support_asset)
         for name, pos, ori in zip(self.cfg["tensegrityParams"]["supportNames"],
                                 self.cfg["tensegrityParams"]["positions"],
                                 self.cfg["tensegrityParams"]["orientations"]):
@@ -162,15 +200,31 @@ class TenseBot6(VecTask):
             scaled_pos = np.array(pos)*self.cfg["tensegrityParams"]["seperationDist"]
             initial_pose.p = gymapi.Vec3(scaled_pos[0],scaled_pos[1],scaled_pos[2]+self.cfg["tensegrityParams"]["spawnHeight"])
             initial_pose.r = gymapi.Quat.from_euler_zyx(ori[0],ori[1],ori[2])
-            SupportHandle = self.gym.create_actor(env, asset, initial_pose, name, collision_group, collision_filter, 0)    
+            SupportHandle = self.gym.create_actor(env, support_asset, initial_pose, name, collision_group, collision_filter, 0)    
             # Set the coloring (Fun)
             # rand_colors = torch.rand((3), device=self.device)
             self.gym.set_rigid_body_color(env, SupportHandle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(0.97, 0.38, 0.06))
             self.gym.set_rigid_body_color(env, SupportHandle, 1, gymapi.MESH_VISUAL, gymapi.Vec3(0.06, 0.97, 0.38))
             self.gym.set_rigid_body_color(env, SupportHandle, 2, gymapi.MESH_VISUAL, gymapi.Vec3(0.38, 0.06, 0.97))
             # Add to Tensegrity list for access later
-            assembly_handles.append(SupportHandle)                
+            assembly_handles.append(SupportHandle)
+        # Create the armored core! 
+        initial_pose.p = gymapi.Vec3(0, 0, self.cfg["tensegrityParams"]["spawnHeight"])
+        initial_pose.r = gymapi.Quat.from_euler_zyx(0,0,0) 
+        CoreHandle = self.gym.create_actor(env, core_asset, initial_pose, 'Core', collision_group, collision_filter)       
+        assembly_handles.append(CoreHandle)            
         return assembly_handles
+
+    def create_force_sensors(self, asset):
+        # create force sensors attached to the "feet"
+        num_bodies = self.gym.get_asset_rigid_body_count(asset) # This is number of bodies that compose the support rod
+        body_names = [self.gym.get_asset_rigid_body_name(asset, i) for i in range(num_bodies)]
+        extremity_names = [s for s in body_names if "endpoint" in s]
+        extremities_index = torch.zeros(len(extremity_names), dtype=torch.long, device=self.device)
+        extremity_indices = [self.gym.find_asset_rigid_body_index(asset, name) for name in extremity_names]
+        sensor_pose = gymapi.Transform()
+        for body_idx in extremity_indices:
+            self.gym.create_asset_force_sensor(asset, body_idx, sensor_pose)
 
     def create_sim(self):
         # set the up axis to be z-up given that assets are y-up by default
@@ -195,37 +249,40 @@ class TenseBot6(VecTask):
         lower = gymapi.Vec3(0.5 * -spacing, -spacing, 0.0)
         upper = gymapi.Vec3(0.5 * spacing, spacing, spacing)
 
-        asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
-        asset_file = "urdf/RodAssembly/urdf/RodAssembly.urdf"
+        support_asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
+        support_asset_file = "urdf/RodAssembly/urdf/RodAssembly.urdf"
+        core_asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
+        core_asset_file = "urdf/Core.urdf"
+        
+        # if "asset" in self.cfg["env"]:
+        #     asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
+        #     asset_file = self.cfg["env"]["asset"].get("assetFileName", asset_file)
 
-        if "asset" in self.cfg["env"]:
-            asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
-            asset_file = self.cfg["env"]["asset"].get("assetFileName", asset_file)
-
-        asset_path = os.path.join(asset_root, asset_file)
+        asset_path = os.path.join(support_asset_root, support_asset_file)
         asset_root = os.path.dirname(asset_path)
         asset_file = os.path.basename(asset_path)
-
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = False
         asset_options.angular_damping = self.angularDamping
         asset_options.max_angular_velocity = self.angularVelocity
-
         support_asset = self.gym.load_asset(self.sim, asset_root, asset_file, asset_options)
+        asset_path = os.path.join(core_asset_root, core_asset_file)
+        asset_root = os.path.dirname(asset_path)
+        asset_file = os.path.basename(asset_path)
+        asset_options = gymapi.AssetOptions()
+        asset_options.fix_base_link = False
+        asset_options.angular_damping = self.angularDamping
+        asset_options.max_angular_velocity = self.angularVelocity
+        core_asset =  self.gym.load_asset(self.sim, asset_root, asset_file, asset_options)
         self.num_dof = self.gym.get_asset_dof_count(support_asset)
 
         goal_asset = self.gym.create_sphere(self.sim, 0.025)
-        self.num_bodies = self.gym.get_asset_rigid_body_count(support_asset)*self.cfg["tensegrityParams"]["numSupports"] + self.gym.get_asset_rigid_body_count(goal_asset) #3 rod assemblies per tensebot
-        # self.num_actor = get_sim_actor_count
         
-        self.rod_handles = []
         self.tensebot_handles = []
         self.goal_handles = []
         self.envs = []
-        self.dof_limits_lower = []
-        self.dof_limits_upper = []
 
-        self.create_tensegrity_connections()
+        
         for i in range(self.num_envs):
             # create env instance
             env_ptr = self.gym.create_env(
@@ -233,7 +290,7 @@ class TenseBot6(VecTask):
             )
             # Creates a tensegrity bot for an environment
             # Returns a list of handles for the support actors
-            self.tensebot_handles.append(self.create_tensegrity(env_ptr, support_asset, collision_group=i, collision_filter=0))
+            self.tensebot_handles.append(self.create_tensegrity(env_ptr, support_asset, core_asset, collision_group=i, collision_filter=0))
             self.envs.append(env_ptr)
 
             # Set Up the Goal Actor
@@ -245,6 +302,9 @@ class TenseBot6(VecTask):
 
             
         self.num_actors = self.gym.get_actor_count(self.envs[0])
+        self.num_bodies = self.gym.get_env_rigid_body_count(self.envs[0])
+
+        print('num_actors:{}, num_bodies:{}'.format(self.num_actors, self.num_bodies))
         self.body_dict = self.gym.get_actor_rigid_body_dict(env_ptr, self.tensebot_handles[0][0])
         self.joint_dict = self.gym.get_actor_joint_dict(env_ptr, self.tensebot_handles[0][0])
 
@@ -254,10 +314,17 @@ class TenseBot6(VecTask):
                 print(b)
         print('joint_dict:')
         for j in self.joint_dict:
-            print(j)        
+            print(j)    
+
+        self.create_tensegrity_connections()    
 
 
     def compute_reward(self):
+        # print(self.tensebot_pos)
+        # print('self.goal_pos : {}'.format(self.goal_pos))
+        # print(self.potentials)
+        # print(self.prev_potentials)
+        # time.sleep(1)
         self.rew_buf[:], self.reset_buf[:], self.goal_reset = compute_tensebot_reward(
             self.tensebot_pos,
             self.goal_pos,
@@ -288,15 +355,27 @@ class TenseBot6(VecTask):
             self.body_contact_force,
             self.goal_pos, 
             self.potentials,
+            self.basis_vec0,
+            self.basis_vec1,
+            self.inv_start_rot,
             self.actions, 
             self.dt)
+        
+        self.gym.refresh_force_sensor_tensor(self.sim)
+        self.gym.refresh_net_contact_force_tensor(self.sim)
+        # print(self.foot_forces.view(self.num_envs, 12, 3)[0, :, :])
+        print(self.contact_tensor.view(self.num_envs, self.num_bodies, 3)[0, :, :])
+        # print(torch.where(torch.sum(self.body_contact_force, dim=-1) != 0, 1, 0))
+        # print(self.obs_buf.shape)
+        # print(self.obs_buf[0,:])
+        # print(self.obs_buf)
         return self.obs_buf
 
     def reset_idx(self, env_ids):
         # print('Resetting IDX! Env_IDs = {}'.format(env_ids))
         
         env_ids_int32 = env_ids.to(dtype=torch.int32)*self.num_actors
-        env_ids_int32 = torch.cat((env_ids_int32, env_ids_int32+1, env_ids_int32+2, env_ids_int32+3, env_ids_int32+4, env_ids_int32+5))
+        env_ids_int32 = torch.cat((env_ids_int32, env_ids_int32+1, env_ids_int32+2, env_ids_int32+3, env_ids_int32+4, env_ids_int32+5, env_ids_int32+6))
 
         self.tensebot_root_state[env_ids, :, :] = self.tensebot_initial_root_states[env_ids, :, :]
 
@@ -337,7 +416,7 @@ class TenseBot6(VecTask):
         # print('Resetting Goals! Env_IDs = {}'.format(env_ids))
         # print('Old Goal Position = {}'.format(self.goal_pos))
 
-        env_ids_int32 = env_ids.to(dtype=torch.int32)*self.num_actors + 6
+        env_ids_int32 = env_ids.to(dtype=torch.int32)*self.num_actors + 7
         goal_pos_update = torch_rand_float(-self.goal_dist, self.goal_dist, (len(env_ids), 3), device=self.device)
         # goal_pos_update[:,0] = 1000.0
         # goal_pos_update[:,1] = 0.0
@@ -348,13 +427,13 @@ class TenseBot6(VecTask):
                                               gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
 
         # self.gym.refresh_actor_root_state_tensor(self.sim)
-        tensebot_avg_pos = torch.mean(self.tensebot_pos, dim=1)
-        to_target = self.goal_pos[env_ids, :] - tensebot_avg_pos[env_ids, :]
+        to_target = self.goal_pos[env_ids, :] - self.tensebot_pos[env_ids, :]
         to_target[:, 2] = 0.0        
         self.prev_potentials[env_ids] = -torch.norm(to_target, p=2, dim=-1) / self.dt
         self.potentials[env_ids] = self.prev_potentials[env_ids].clone()
 
         self.goal_reset[env_ids] = 0
+        # self.gym.refresh_actor_root_state_tensor(self.sim)
         # print('New Goal Position = {}'.format(self.goal_pos))
 
     def pre_physics_step(self, actions):
@@ -375,6 +454,10 @@ class TenseBot6(VecTask):
         force_positions = self.rb_pos.clone()
 
         num_lines = len(self.connection_list)
+        # print(self.connection_list)
+        # print(num_lines)
+        # print(self.connection_matrix.shape)
+        # time.sleep(10)
         line_vertices = torch.zeros((num_lines*2,3), device=self.device, dtype=torch.float)
         line_colors = torch.zeros((num_lines,3), device=self.device, dtype=torch.float)
 
@@ -387,8 +470,13 @@ class TenseBot6(VecTask):
 
         spring_constant = self.cfg["tensegrityParams"]["spring_coff"]
         damping_constant = self.cfg["tensegrityParams"]["damping_coff"]
-        spring_lengths = self.connection_list[:, 2]*spring_length_multiplier
+        spring_lengths = torch.unsqueeze(self.connection_list[:, 2], dim=0).repeat((self.num_envs, 1))
+        # print(spring_lengths)
+        # print(spring_lengths.shape)
+        # print(spring_length_multiplier)
+        # print(spring_length_multiplier.shape)
 
+        spring_lengths[:, 0:24] *= spring_length_multiplier
         endpoint_distances = torch.norm(P1s-P2s, dim=-1)
         # print((P1s - P2s).shape)
         # print(endpoint_distances.shape)
@@ -424,8 +512,9 @@ class TenseBot6(VecTask):
         # print(torch.unsqueeze(self.connection_matrix, 0).repeat(self.num_envs,1,1).shape)
         # print( (-applied_forces + damping_forces).shape )
         # print(torch.matmul(torch.unsqueeze(self.connection_matrix, 0).repeat(self.num_envs,1,1), -applied_forces + damping_forces).shape)
-        # print(forces.shape)
-        # time.sleep(1)
+        # print(applied_forces.shape)
+        applied_forces[:, -6:, :] /= 10
+        damping_forces[:, -6:, :] /= 10
         forces = torch.matmul(torch.unsqueeze(self.connection_matrix, 0).repeat(self.num_envs,1,1), -applied_forces + damping_forces)
         forces = torch.nan_to_num(forces, nan=0.0)
         # print(forces)
@@ -453,7 +542,7 @@ class TenseBot6(VecTask):
         # Look at the first actor
         env_idx = 0
         camOffset = gymapi.Vec3(0, -1.5, 0.25)
-        camTarget = gymapi.Vec3(self.tensebot_pos[env_idx, 0, 0],self.tensebot_pos[env_idx, 0, 1],self.tensebot_pos[env_idx, 0, 2])
+        camTarget = gymapi.Vec3(self.tensebot_pos[env_idx, 0],self.tensebot_pos[env_idx, 1],self.tensebot_pos[env_idx, 2])
         camEnvOffset = gymapi.Vec3(0, 0, 0)
         # print(camOffset)
         # print(camTarget)
@@ -534,43 +623,39 @@ def compute_tensebot_reward(
     # reset agents
     reset = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
-    # tensebot_avg_pos = torch.mean(tensebot_pos, dim=1)
-    tensebot_avg_pos = tensebot_pos[:,0,:]
-    distance_to_goal = torch.norm(tensebot_avg_pos - goal_pos, dim=-1)
+    distance_to_goal = torch.norm(tensebot_pos - goal_pos, dim=-1)
     goal_reached = torch.where(distance_to_goal < goal_threshold, 1, 0)
     goal_reset = torch.where(goal_reached==1, 1, 0)
 
     return total_reward, reset, goal_reset
-
 
 @torch.jit.script
 def compute_tensebot_observations(tensebot_pos,                 #Tensor
                                  tensebot_ori,                  #Tensor
                                  tensebot_linvel,               #Tensor
                                  tensebot_angvel,               #Tensor
-                                 tensebot_contact,               #Tensor
+                                 tensebot_contact,              #Tensor
                                  goal_pos,                      #Tensor
                                  potentials,                    #Tensor
+                                 basis_vec0,                    #Tensor
+                                 basis_vec1,                    #Tensor
+                                 inv_start_rot,                 #Tensor
                                  actions,                       #Tensor
                                  dt                             #float
                                  ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor, Tensor]
     # tensebot_avg_pos = torch.mean(tensebot_pos, dim=1)
-    avg_pos = torch.mean(tensebot_pos, dim=1)
-    avg_linvel = torch.mean(tensebot_linvel, dim=1)
-    avg_angvel = torch.mean(tensebot_angvel, dim=1)
-    to_target = goal_pos - avg_pos
+    to_target = goal_pos - tensebot_pos
     to_target[:, 2] = 0.0
-    to_target_norm = torch.div(to_target, torch.unsqueeze(torch.norm(to_target, p=2, dim=-1),1).repeat(1,3))
 
     prev_potentials_new = potentials.clone()
     potentials = -torch.norm(to_target, p=2, dim=-1) / dt
 
-    # torso_quat, up_proj, heading_proj, up_vec, heading_vec = compute_heading_and_up(
-    #     tensebot_ori, inv_start_rot, to_target, basis_vec0, basis_vec1, 2)
+    torso_quat, up_proj, heading_proj, up_vec, heading_vec = compute_heading_and_up(
+        tensebot_ori, inv_start_rot, to_target, basis_vec0, basis_vec1, 2)
 
-    # vel_loc, angvel_loc, roll, pitch, yaw, angle_to_target = compute_rot(
-    #     torso_quat, tensebot_linvel, tensebot_angvel, goal_pos, tensebot_pos)
+    linvel_loc, angvel_loc, roll, pitch, yaw, angle_to_target = compute_rot(
+        torso_quat, tensebot_linvel, tensebot_angvel, goal_pos, tensebot_pos)
     
     contact = torch.where(torch.sum(tensebot_contact, dim=-1) != 0, 1, 0)
     # obs_buf shapes: (81)
@@ -587,13 +672,14 @@ def compute_tensebot_observations(tensebot_pos,                 #Tensor
     #                  contact, goal_pos, to_target_norm, actions), dim=-1)
 
         # obs_buf shapes: (81)
-    # obs_buf[0:9] = Avg Pos (3), Avg LinVel (3), Avg AngVel (3) : 9
-    # obs_buf[9:27] = Contact Bools (3 per support) (18)
-    # obs_buf[27:30] = Goal Pos : Pos(3)
-    # obs_buf[33:36] = vector to goal (3) 
-    # obs_buf[36:60] = actions : Spring Length Multipliers (24 for T6)
-    obs = torch.cat((avg_pos, avg_linvel, avg_angvel, 
-                     contact, goal_pos, to_target_norm, actions), dim=-1)
+    # obs_buf[0:13] = Core Pos, Ori, linvel_loc, angvel_loc
+    # obs_buf[13:31] = Contact Bools (3 per support) (18)
+    # obs_buf[31:34] = Goal Pos : Pos(3)
+    # obs_buf[34:58] = actions : Spring Length Multipliers (24 for T6)
+    # obs_buf[59][60][61] = angle_to_target, up_proj, heading_proj
+    obs = torch.cat((tensebot_pos, tensebot_ori, linvel_loc, angvel_loc, 
+                     contact, goal_pos, actions,
+                     angle_to_target.unsqueeze(-1), up_proj.unsqueeze(-1), heading_proj.unsqueeze(-1)), dim=-1)
 
     return obs, potentials, prev_potentials_new
     

@@ -333,8 +333,8 @@ while not gym.query_viewer_has_closed(viewer):
     line_colors = torch.tensor([[1.0, 0.0, 0.0]]).repeat((len(connection_list), 1))
     i += 1
 
-    applied_forces[-6:] /= 10
-    damping_forces[-6:] /= 10
+    applied_forces[:, -6:, :] /= 10
+    damping_forces[:, -6:, :] /= 10
     forces[0,:] = torch.matmul(connection_matrix, -applied_forces + damping_forces)
     # force_position_offsets = torch.matmul(connection_matrix, endpoint_normalized_vectors*0.01)
     # force_positions += force_position_offsets

@@ -56,7 +56,7 @@ tensegrityParams:
   spawnHeight: 0.15  
   spring_coff: 50
   damping_coff: 0.99
-  spring_length_change_factor: 0.50 #The % a spring change change from its rest length
+  spring_length_change_factor: 0.25 #The % a spring change change from its rest length
 
   supportNames: ["X1", "X2", "Y1", "Y2", "Z1", "Z2"]
   positions: [[0.0, 1.0, 0.0], #This is multiplied by seperation distance
@@ -97,9 +97,13 @@ tensegrityParams:
                 ["Y2", "T", "Z1", "T", 0.1], # Connections to Y2 Top
                 ["Y2", "T", "Z2", "T", 0.1],
                 ["Y2", "B", "Z1", "T", 0.1], # Connectionts to Y2 Bottom 
-                ["Y2", "B", "Z2", "T", 0.1]]
-                # Thats all of them, no repeats
-
+                ["Y2", "B", "Z2", "T", 0.1], # Thats all of them, no repeats
+                ["Core", "C1", "X1", "M", 0.0], #Connections to the Core Actor
+                ["Core", "C2", "X2", "M", 0.0],
+                ["Core", "C3", "Y1", "M", 0.0],
+                ["Core", "C4", "Y2", "M", 0.0],
+                ["Core", "C5", "Z1", "M", 0.0], 
+                ["Core", "C6", "Z2", "M", 0.0]] 
 
 sim:
   dt: 0.001 # 1/1000 s

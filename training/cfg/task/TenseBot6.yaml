@@ -7,7 +7,7 @@ physics_engine: ${..physics_engine}
 env:
   numEnvs: ${resolve_default:2048,${...num_envs}}
   envSpacing: 1.0
-  maxEpisodeLength: 2000
+  maxEpisodeLength: 20000
 
   clipObservations: 5.0
   clipActions: 1.0
@@ -37,8 +37,8 @@ env:
     angularVelocity: 10000.0
 
   plane:
-    staticFriction: 0.6
-    dynamicFriction: 0.5
+    staticFriction: 1.0
+    dynamicFriction: 1.0
     restitution: 0.0
   
   # reward parameters
@@ -56,7 +56,7 @@ tensegrityParams:
   spawnHeight: 0.15  
   spring_coff: 50
   damping_coff: 0.99
-  spring_length_change_factor: 0.25 #The % a spring change change from its rest length
+  spring_length_change_factor: 0.5 #The % a spring change change from its rest length
 
   supportNames: ["X1", "X2", "Y1", "Y2", "Z1", "Z2"]
   positions: [[0.0, 1.0, 0.0], #This is multiplied by seperation distance
@@ -124,7 +124,7 @@ sim:
     default_buffer_size_multiplier: 2.0
     max_gpu_contact_pairs: 1048576 # 1024*1024
     num_subscenes: ${....num_subscenes}
-    contact_collection: 0 # 0: CC_NEVER (don't collect contact info), 1: CC_LAST_SUBSTEP (collect only contacts on last substep), 2: CC_ALL_SUBSTEPS (default - all contacts)
+    contact_collection: 2 # 0: CC_NEVER (don't collect contact info), 1: CC_LAST_SUBSTEP (collect only contacts on last substep), 2: CC_ALL_SUBSTEPS (default - all contacts)
 
 task:
   randomize: False

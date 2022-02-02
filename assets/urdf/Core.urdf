@@ -35,7 +35,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.01"/>
+        <sphere radius="0.005"/>
       </geometry>
       <material name="Blue">
         <color rgba=".0157 .1176 .6588 0.8"/>
@@ -44,7 +44,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.01"/>
+        <sphere radius="0.005"/>
       </geometry>
       <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
     </collision>
@@ -53,7 +53,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <material name="Orange">
         <color rgba=".9569 .5372 .2588 1"/>
@@ -62,7 +62,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
     </collision>
@@ -71,7 +71,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <material name="Orange">
         <color rgba=".9569 .5372 .2588 1"/>
@@ -80,7 +80,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
     </collision>
@@ -89,7 +89,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <material name="Grey">
         <color rgba="0.35 0.35 0.35 1"/>
@@ -98,7 +98,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
     </collision>
@@ -107,7 +107,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <material name="Grey">
         <color rgba="0.35 0.35 0.35 1"/>
@@ -116,7 +116,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
     </collision>
@@ -125,7 +125,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <material name="Purple">
         <color rgba="0.8 0.1 0.8 1"/>
@@ -134,7 +134,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
     </collision>
@@ -143,7 +143,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <material name="Purple">
         <color rgba="0.8 0.1 0.8 1"/>
@@ -152,38 +152,38 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <sphere radius="0.0025"/>
       </geometry>
       <!-- <contact_coefficient mu="0"  resitution="0"  k_p="0"  k_d="0" /> -->
     </collision>
   </link>
   <joint name="$fixed_Core_Connector_1" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0.01 0"/>
+    <origin rpy="0 0 0" xyz="0 0.005 0"/>
     <parent link="Core"/>
     <child link="Connector_1"/>
   </joint>
   <joint name="$fixed_Core_Connector_2" type="fixed">
-    <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+    <origin rpy="0 0 0" xyz="0 -0.005 0"/>
     <parent link="Core"/>
     <child link="Connector_2"/>
   </joint>
   <joint name="$fixed_Core_Connector_3" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0 0.01"/>
+    <origin rpy="0 0 0" xyz="0 0 0.005"/>
     <parent link="Core"/>
     <child link="Connector_3"/>
   </joint>
   <joint name="$fixed_Core_Connector_4" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0 -0.01"/>
+    <origin rpy="0 0 0" xyz="0 0 -0.005"/>
     <parent link="Core"/>
     <child link="Connector_4"/>
   </joint>
   <joint name="$fixed_Core_Connector_5" type="fixed">
-    <origin rpy="0 0 0" xyz="0.01 0 0"/>
+    <origin rpy="0 0 0" xyz="0.005 0 0"/>
     <parent link="Core"/>
     <child link="Connector_5"/>
   </joint>
   <joint name="$fixed_Core_Connector_6" type="fixed">
-    <origin rpy="0 0 0" xyz="-0.01 0 0"/>
+    <origin rpy="0 0 0" xyz="-0.005 0 0"/>
     <parent link="Core"/>
     <child link="Connector_6"/>
   </joint>

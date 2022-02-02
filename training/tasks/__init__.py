@@ -29,8 +29,10 @@
 
 from tasks.tensebot import TenseBot
 from tasks.tensebot6 import TenseBot6
+from tasks.tensebot6_extended_obs import TenseBot6_EO
 # Mappings from strings to environments
 isaacgym_task_map = {
     "TenseBot": TenseBot,
     "TenseBot6": TenseBot6,
+    "TenseBot6_EO": TenseBot6_EO,
 }

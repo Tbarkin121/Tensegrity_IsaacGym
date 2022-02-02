@@ -13,9 +13,9 @@
     <xacro:property name="Green" value="0.1 0.8 0.1 1" />
     <xacro:property name="Purple" value="0.8 0.1 0.8 1" />
     <!-- Physical Properties -->
-    <xacro:property name="CoreSize" value="0.01" />
-    <xacro:property name="ConnectorSize" value="0.005" />
-    <xacro:property name="ConnectionDist" value="0.01" />
+    <xacro:property name="CoreSize" value="0.005" />
+    <xacro:property name="ConnectorSize" value="0.0025" />
+    <xacro:property name="ConnectionDist" value="0.005" />
 
 
     <!-- Color Definitions-->

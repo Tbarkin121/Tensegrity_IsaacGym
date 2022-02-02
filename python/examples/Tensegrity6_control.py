@@ -79,7 +79,7 @@ class Tensegrity6_testing():
         if args.use_gpu_pipeline:
             print("WARNING: Forcing CPU pipeline.")
 
-        self.device = 'cpu'
+        self.device = 'cpu' #cuda isn't quite working yet... need to do some more debugging
         self.sim = self.gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
         # sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, gymapi.SIM_FLEX, sim_params)
         if self.sim is None:
@@ -123,7 +123,7 @@ class Tensegrity6_testing():
         # Create environmentself.tensebot_handles = []
         self.tensebot_handles = []
         self.envs = []        
-        self.create_force_sensors(support_asset)
+        # self.create_force_sensors(support_asset)
         for i in range(self.num_envs):
             # create env instance
             env_ptr = self.gym.create_env(
@@ -251,12 +251,11 @@ class Tensegrity6_testing():
         self.rb_linvel = self.rb_state.view(self.num_envs, self.num_bodies, 13)[..., 7:10] #(num_envs, num_rigid_bodies, 13)[pos,ori,Lin-vel,Ang-vel]
         self.rb_angvel = self.rb_state.view(self.num_envs, self.num_bodies, 13)[..., 10:13] #(num_envs, num_rigid_bodies, 13)[pos,ori,Lin-vel,Ang-vel]
 
-        sensor_tensor = self.gym.acquire_force_sensor_tensor(self.sim)
-        sensors_per_env = 12
-        self.vec_sensor_tensor = gymtorch.wrap_tensor(sensor_tensor)
-        # tensebot_pos = root_states.view(num_envs, num_actors, 13)[..., 0:6, 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
-        self.foot_forces = self.vec_sensor_tensor.view(self.num_envs, sensors_per_env, 6)[..., 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
-        self.foot_torques = self.vec_sensor_tensor.view(self.num_envs, sensors_per_env, 6)[..., 3:6] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        # sensor_tensor = self.gym.acquire_force_sensor_tensor(self.sim)
+        # sensors_per_env = 12
+        # self.vec_sensor_tensor = gymtorch.wrap_tensor(sensor_tensor)
+        # self.foot_forces = self.vec_sensor_tensor.view(self.num_envs, sensors_per_env, 6)[..., 0:3] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
+        # self.foot_torques = self.vec_sensor_tensor.view(self.num_envs, sensors_per_env, 6)[..., 3:6] #num_envs, num_actors, 13 (pos,ori,Lvel,Avel)
 
         self.contact_tensor = self.gym.acquire_net_contact_force_tensor(self.sim)
         self.vec_contact_tensor = gymtorch.wrap_tensor(self.contact_tensor)
@@ -282,8 +281,6 @@ class Tensegrity6_testing():
 
         sensor_pose = gymapi.Transform()
         for body_idx in extremity_indices:
-            print(body_idx)
-            time.sleep(1)
             self.gym.create_asset_force_sensor(asset, body_idx, sensor_pose)
 
     def create_contact_sensors(self):
@@ -298,8 +295,7 @@ class Tensegrity6_testing():
 
         # forces = torch.zeros((self.num_envs, self.num_bodies, 3), device=self.device, dtype=torch.float)        
         forces = torch.zeros_like(self.rb_pos, device=self.device, dtype=torch.float)
-        force_positions = self.rb_pos.clone()
-
+        force_positions = self.rb_pos.clone().to(device=self.device)
         num_lines = len(self.connection_list)
         # print(self.connection_list)
         # print(num_lines)
@@ -332,7 +328,7 @@ class Tensegrity6_testing():
         endpoint_normalized_vectors = torch.div((P1s - P2s), torch.unsqueeze(endpoint_distances,-1).repeat(1,1,3))
         spring_forces = spring_constant*(endpoint_distances-spring_lengths)
         # Set springs to exert force for tension and not compression (Helps with stability and is how cables would work)
-        spring_forces = torch.max(spring_forces, torch.zeros_like(spring_forces))
+        spring_forces = torch.max(spring_forces, torch.zeros_like(spring_forces, device=self.device))
         applied_forces = torch.mul(endpoint_normalized_vectors, torch.unsqueeze(spring_forces,-1).repeat(1,1,3))
         
         endpoint_velocities = torch.zeros( (self.num_envs, len(self.connection_list), 2, 3), device=self.device, dtype=torch.float)
@@ -372,12 +368,16 @@ class Tensegrity6_testing():
         self.gym.add_lines(self.viewer, self.envs[0], num_lines, line_vertices.cpu().detach(), line_colors.cpu().detach())
 
     def simulation_loop(self):
+        loop_count = 0
         while not self.gym.query_viewer_has_closed(self.viewer):
+            time.sleep(0.25)
+            loop_count += 1
             self.gym.refresh_actor_root_state_tensor(self.sim)
             self.gym.refresh_rigid_body_state_tensor(self.sim)
             self.gym.refresh_net_contact_force_tensor(self.sim)
 
-            actions = torch.zeros((self.num_envs, 24))
+            actions = torch.ones((self.num_envs, 24), device=self.device)*-1
+            # actions *= (torch.sin(torch.tensor(loop_count)/100)*0.8 + 1)
             self.calculate_tensegrity_forces(actions)
                 
             contact = torch.where(torch.sum(self.body_contact_force, dim=-1) != 0, 1, 0)
